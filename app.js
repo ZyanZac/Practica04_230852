@@ -1,25 +1,23 @@
 //Exportación de librerías necesarias
 import express, { request, response } from 'express'
 import session from 'express-session'
-import bodyParser from 'body-parser'
 import { v4 as uuidv4 } from 'uuid'; //versión 4 de uuid
 import os, { networkInterfaces } from 'os';
-import { error } from 'console';
-import e from 'express';
 
+const sessions = new Map();
 
 const app = express();
 const PORT = 3500;
 
 app.listen(PORT, () => {
-    console.log(`Servidor iniciado en http://localhost${PORT}`);
+    console.log(`Servidor iniciado en http://localhost:${PORT}`);
 });
 
 app.use(express.json());
 app.use(express.urlencoded({extended: true}));
 
 //Sesiones almacenadas en Memoria(RAM) - Cuando Express cae, todo cae.
-const sessions = {};
+//const sessions = {};
 
 app.use(
     session({
@@ -70,7 +68,7 @@ app.post('/login', (request, response) => {
     const sessionId = uuidv4();
     const now = new Date();
 
-    session[sessionId] = {
+    const sessionData/*session[sessionId]*/ = {
         sessionId,
         email,
         nickname,
@@ -79,6 +77,11 @@ app.post('/login', (request, response) => {
         createAt: now, //CDMX format
         lastAccesed: now
     };
+
+    sessions.set(sessionId, sessionData)
+    request.session.userSession = sessionData
+
+    console.log('Sesion creada', sessionData)
 
     response.status(200).json({
         message: "Se ha logueado exitosamente",
@@ -91,11 +94,12 @@ app.post('/login', (request, response) => {
 app.post("/logout", (request, response) => {
     const {sessionId} = request.body;
 
-    if(!sessionId || !sessions[sessionId]){
+    if(!sessionId || !sessions.has[sessionId]){
         return response.status(404).json({message: "No se ha encontrado una sesión activa."});
     }
 
-    delete sessions[sessionId]; //Borra la sesión de la lista
+    //delete sessions[sessionId]; //Borra la sesión de la lista
+    sessions.delete(sessionId)
     request.session.destroy((err) => {
         if(err){
             return response.status(500).send('Error al cerrar sesión')
@@ -106,28 +110,40 @@ app.post("/logout", (request, response) => {
 });
 
 
-app.post("/update", (request, response) => {
-    const {sessionId, email, nickname} = request.body;
+app.put("/update", (request, response) => {
+    const { sessionId } = request.body;
 
-    if(!sessionId || !sessions[sessionId]){
+    if(!sessionId || !sessions.has(sessionId)){
         return response.status(404).json({message: "No existe una sesión activa"})
     }
 
-    if(email) sessions[sessionId].email = email;
-    if(nickname) sessions[sessionId].nickname = nickname;
-        IdleDeadline()
-        sessions[sessionId].lastAcceses = new Date();
+    //if(email) sessions[sessionId].email = email;
+    //if(nickname) sessions[sessionId].nickname = nickname;
+        //IdleDeadline()
+    //sessions[sessionId].lastAccess = new Date();
+    const sessionData = sessions.get(sessionId)
+    sessionData.lastAccesed = new Date();
+
+    sessions.set(sessionId, sessionData)
+    request.session.userSession = sessionData
+
+    return response.status(200).json({
+        message: "Sesión actualizada correctamente",
+        session: request.session.user //sessions[sessionId]
+    })
 })
 
 app.get("/status", (request, response) => {
     const sessionId = request.query.sessionId;
-    if(!sessionId || !sessions[sessionId]){
-        response.status(404).json({message: "No hay sesiones activas"})
+    if(!sessionId || !sessions.has[sessionId]){
+        return response.status(404).json({message: "No hay sesiones activas"})
     }
+
+    const sessionData = sessions.get(sessionId)
     
-    response.status(200).json({
+    return response.status(200).json({
         message: "Sesión Activa",
-        session: sessions[sessionId]
+        session: sessionData//sessions[sessionId]
     })
 })
 
