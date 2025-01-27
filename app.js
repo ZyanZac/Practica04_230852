@@ -66,6 +66,43 @@ const getServerInfo = () => {
     return serverInfo;
 };
 
+const calculateInactivityTime = (lastAccesed) => {
+    try {
+        const now = new Date();
+        // Convertir el formato "DD-MM-YYYY HH:mm:ss CST" a formato que JS pueda parsear
+        const [datePart, timePart] = lastAccesed.split(' ');
+        const [day, month, year] = datePart.split('-');
+        const [hours, minutes, seconds] = timePart.split(':');
+        
+        const lastAccess = new Date(year, month - 1, day, hours, minutes, seconds);
+        const diff = now - lastAccess;
+        
+        if (isNaN(diff)) {
+            throw new Error('Invalid date calculation');
+        }
+        
+        // Convertir milisegundos a formato legible
+        const totalSeconds = Math.floor(diff / 1000);
+        const totalMinutes = Math.floor(totalSeconds / 60);
+        const totalHours = Math.floor(totalMinutes / 60);
+        
+        return {
+            hours: totalHours % 24,
+            minutes: totalMinutes % 60,
+            seconds: totalSeconds % 60,
+            formatted: `${totalHours % 24}h ${totalMinutes % 60}m ${totalSeconds % 60}s`
+        };
+    } catch (error) {
+        console.error('Error calculating inactivity time:', error);
+        return {
+            hours: 0,
+            minutes: 0,
+            seconds: 0,
+            formatted: '0h 0m 0s'
+        };
+    }
+};
+
 // Función para obtener la IP del cliente
 const getClientInfo = (req) => {
     let clientIP = req.ip || 
@@ -234,6 +271,15 @@ app.get("/status", (request, response) => {
     // Actualizar IP del cliente
     const clientInfo = getClientInfo(request);
     sessionData.clientInfo.ip = clientInfo.ip;
+
+    // Calcular tiempo de inactividad
+    const inactivityTime = calculateInactivityTime(sessionData.lastAccesed);
+    sessionData.inactivityTime = {
+        hours: inactivityTime.hours,
+        minutes: inactivityTime.minutes,
+        seconds: inactivityTime.seconds,
+        formatted: `${inactivityTime.hours}h ${inactivityTime.minutes}m ${inactivityTime.seconds}s`
+    };
     
     return response.status(200).json({
         message: "Sesión Activa",
@@ -255,21 +301,30 @@ app.get("/listCurrentSessions", (request, response) => {
     const serverInfo = getServerInfo();
     const clientInfo = getClientInfo(request);
 
-    const activeSessions = Array.from(sessions.values()).map(session => ({
-        sessionId: session.sessionId,
-        email: session.email,
-        nickname: session.nickname,
-        clientInfo: {
-            ip: clientInfo.ip,
-            mac: session.clientInfo.mac
-        },
-        serverInfo: {
-            ip: serverInfo.ip,
-            mac: serverInfo.mac
-        },
-        createAt: session.createAt,
-        lastAccesed: session.lastAccesed
-    }));
+    const activeSessions = Array.from(sessions.values()).map(session => {
+        const inactivityTime = calculateInactivityTime(session.lastAccesed);
+        return {
+            sessionId: session.sessionId,
+            email: session.email,
+            nickname: session.nickname,
+            clientInfo: {
+                ip: clientInfo.ip,
+                mac: session.clientInfo.mac
+            },
+            serverInfo: {
+                ip: serverInfo.ip,
+                mac: serverInfo.mac
+            },
+            createAt: session.createAt,
+            lastAccesed: session.lastAccesed,
+            inactivityTime: {
+                hours: inactivityTime.hours,
+                minutes: inactivityTime.minutes,
+                seconds: inactivityTime.seconds,
+                formatted: `${inactivityTime.hours}h ${inactivityTime.minutes}m ${inactivityTime.seconds}s`
+            }
+        };
+    });
 
     return response.status(200).json({
         message: "Sesiones activas encontradas",
