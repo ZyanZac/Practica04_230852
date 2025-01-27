@@ -25,6 +25,25 @@ app.use(
     })
 )
 
+
+const getCDMXDateTime = () => {
+    const date = new Date();
+    const options = {
+        timeZone: 'America/Mexico_City',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+        timeZoneName: 'short'
+    };
+    
+    return date.toLocaleString('es-MX', options).replace(',', '').replace(/\//g, '-');
+};
+
+
 // Función para obtener la IP y MAC del servidor
 const getServerInfo = () => {
     const networkInterfaces = os.networkInterfaces();
@@ -49,12 +68,25 @@ const getServerInfo = () => {
 
 // Función para obtener la IP del cliente
 const getClientInfo = (req) => {
+    let clientIP = req.ip || 
+                  req.connection.remoteAddress || 
+                  req.socket.remoteAddress || 
+                  req.connection.socket?.remoteAddress || 
+                  '0.0.0.0';
+    
+    // Si la IP es ::1 (localhost IPv6) o 127.0.0.1 (localhost IPv4), usar la IP del servidor
+    if (clientIP === '::1' || clientIP === '127.0.0.1') {
+        const serverInfo = getServerInfo();
+        clientIP = serverInfo.ip;
+    }
+    
+    // Si la IP incluye IPv6 prefix ::ffff:, removemos ese prefix
+    if (clientIP.includes('::ffff:')) {
+        clientIP = clientIP.replace('::ffff:', '');
+    }
+
     return {
-        ip: req.ip || 
-            req.connection.remoteAddress || 
-            req.socket.remoteAddress || 
-            req.connection.socket?.remoteAddress || 
-            '0.0.0.0'
+        ip: clientIP
     };
 };
 
@@ -101,7 +133,7 @@ app.post('/login', (request, response) => {
     }
 
     const sessionId = uuidv4();
-    const now = new Date();
+    const now = getCDMXDateTime();
     const serverInfo = getServerInfo();
     const clientInfo = getClientInfo(request);
 
@@ -164,7 +196,7 @@ app.put("/update", (request, response) => {
     const serverInfo = getServerInfo();
     const clientInfo = getClientInfo(request);
 
-    sessionData.lastAccesed = new Date();
+    sessionData.lastAccesed = getCDMXDateTime();
     sessionData.clientInfo.ip = clientInfo.ip;
     sessionData.serverInfo = {
         ip: serverInfo.ip,
